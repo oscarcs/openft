@@ -1,6 +1,7 @@
 pub mod plugin_manager {
     use encoding_rs::*;
-    use std::{fs, io, path::PathBuf};
+    use roxmltree::ParsingOptions;
+    use std::{borrow::Cow, fs, io, path::PathBuf};
 
     pub fn enumerate_plugins() -> Result<Vec<PathBuf>, io::Error> {
         Ok(fs::read_dir("./plugin")?
@@ -27,7 +28,10 @@ pub mod plugin_manager {
                 }
             };
 
-            let (cow, encoding_used, had_errors) = SHIFT_JIS.decode(&xml_bytes);
+            let (mut xml_data, mut encoding_used, mut had_errors) = UTF_8.decode(&xml_bytes);
+            if had_errors {
+                (xml_data, encoding_used, had_errors) = SHIFT_JIS.decode(&xml_bytes);
+            }
 
             println!(
                 "Found plugin file for {} using encoding '{}' ({})",
@@ -39,6 +43,46 @@ pub mod plugin_manager {
                     "no errors"
                 }
             );
+
+            load_plugin_xml(&xml_data);
         }
+    }
+
+    pub fn load_plugin_xml(data: &str) {
+        let doc = match roxmltree::Document::parse_with_options(
+            &data,
+            ParsingOptions {
+                allow_dtd: true,
+                ..Default::default()
+            },
+        ) {
+            Ok(doc) => doc,
+            Err(err) => {
+                println!("Error parsing plugin. {}", err);
+                return;
+            }
+        };
+
+        let mut plugin_name = "";
+        let mut plugin_author = "";
+
+        for node in doc.descendants() {
+            if node.is_element() {
+                if node.tag_name().name() == "plug-in" {
+                    if node.has_children() {
+                        for child in node.children() {
+                            if child.tag_name().name() == "title" {
+                                plugin_name = child.first_child().unwrap().text().unwrap();
+                            }
+                            if child.tag_name().name() == "author" {
+                                plugin_author = child.first_child().unwrap().text().unwrap();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        println!("Found plugin '{}' by {}", plugin_name, plugin_author);
     }
 }

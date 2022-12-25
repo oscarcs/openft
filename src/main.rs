@@ -29,14 +29,7 @@ async fn main() {
         a: 1.0,
     };
 
-    let textures = load_process_textures(&[
-        "res/at_blank.png",
-        "res/at_house1.png",
-        "res/at_apartment1.png",
-        "res/at_apartment2.png",
-        "res/at_apartment3.png",
-    ])
-    .await;
+    let textures = load_process_textures(&["res/EmptyChip.png"]).await;
 
     let mut camera: Vec2 = Vec2 {
         x: 0., //-screen_width() / 6.0,
@@ -47,7 +40,7 @@ async fn main() {
 
     for x in 0..map.len() {
         for y in 0..map[0].len() {
-            map[x][y] = rand::gen_range(0, 5);
+            map[x][y] = 0;
         }
     }
 
@@ -106,7 +99,7 @@ async fn main() {
         if is_mouse_button_pressed(MouseButton::Left) {
             let mouse_xy = screen_to_xy(mouse_pos, camera, zoom_level);
             let mouse_iso = xy_to_iso(mouse_xy);
-            let new_value = rand::gen_range(6, 10);
+            let new_value = rand::gen_range(1, 4);
             map[mouse_iso.x.max(0) as usize][mouse_iso.y.max(0) as usize] = new_value;
         }
 
@@ -145,17 +138,17 @@ async fn main() {
                 };
 
                 let val = map[tx][ty];
-                if val > 5 {
-                    draw(
-                        &textures[(val - 5) as usize],
-                        pos_screen,
-                        0,
-                        color,
-                        zoom_level,
-                    ); // houses
-                } else {
-                    draw(&textures[0], pos_screen, val, color, zoom_level); // ground
-                }
+                draw(&textures[0], pos_screen, val, color, zoom_level); // ground
+                                                                        // if val > 5 {
+                                                                        //     draw(
+                                                                        //         &textures[(val - 5) as usize],
+                                                                        //         pos_screen,
+                                                                        //         0,
+                                                                        //         color,
+                                                                        //         zoom_level,
+                                                                        //     ); // houses
+                                                                        // } else {
+                                                                        // }
 
                 calls += 1;
             }
