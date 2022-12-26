@@ -1,7 +1,15 @@
 pub mod plugin_manager {
     use encoding_rs::*;
-    use roxmltree::{Node, ParsingOptions};
+    use roxmltree::{Error, Node, ParsingOptions};
     use std::{collections::HashMap, fs, io, path::PathBuf};
+
+    #[derive(Debug)]
+    pub struct Plugin {
+        filename: String,
+        title: String,
+        author: String,
+        contributions: Vec<Contribution>,
+    }
 
     #[derive(Debug)]
     struct Contribution {
@@ -19,6 +27,11 @@ pub mod plugin_manager {
         picture_ref: String,
     }
 
+    #[derive(Debug)]
+    pub enum PluginError {
+        ParseError(Error),
+    }
+
     pub fn enumerate_plugins() -> Result<Vec<PathBuf>, io::Error> {
         Ok(fs::read_dir("./plugin")?
             .into_iter()
@@ -28,8 +41,10 @@ pub mod plugin_manager {
             .collect::<Vec<PathBuf>>())
     }
 
-    pub fn load_plugins(plugins: Vec<PathBuf>) {
-        for plugin in plugins {
+    pub fn load_plugins(plugin_paths: Vec<PathBuf>) -> Vec<Plugin> {
+        let mut plugins = Vec::new();
+
+        for plugin in plugin_paths {
             let mut xml = plugin.clone();
             xml.push("plugin.xml");
 
@@ -49,11 +64,20 @@ pub mod plugin_manager {
                 (xml_data, _, _) = SHIFT_JIS.decode(&xml_bytes);
             }
 
-            parse_plugin_xml(&plugin.display().to_string(), &xml_data);
+            let res = parse_plugin_xml(&plugin.display().to_string(), &xml_data);
+
+            match res {
+                Ok(plugin) => plugins.push(plugin),
+                Err(err) => {
+                    println!("Error: {:?}", err);
+                }
+            }
         }
+
+        plugins
     }
 
-    pub fn parse_plugin_xml(filename: &str, data: &str) {
+    pub fn parse_plugin_xml(filename: &str, data: &str) -> Result<Plugin, PluginError> {
         let options = ParsingOptions {
             allow_dtd: true,
             ..Default::default()
@@ -61,16 +85,15 @@ pub mod plugin_manager {
 
         let doc = match roxmltree::Document::parse_with_options(&data, options) {
             Ok(doc) => doc,
-            Err(err) => {
-                println!("Error parsing plugin '{}': {}", filename, err);
-                return;
-            }
+            Err(err) => return Err(PluginError::ParseError(err)),
         };
+
+        let mut metadata = HashMap::new();
+        let mut contributions = Vec::new();
 
         let root = doc.descendants().find(|x| x.tag_name().name() == "plug-in");
         match root {
             Some(root) => {
-                let mut metadata = HashMap::new();
                 let metadata_nodes = root
                     .children()
                     .filter(|x| x.is_element() && x.tag_name().name() != "contribution");
@@ -101,7 +124,6 @@ pub mod plugin_manager {
                     .filter(|x| x.tag_name().name() == "contribution")
                     .filter(|y| y.attribute("type").unwrap_or("picture") != "picture");
 
-                let mut contributions = Vec::new();
                 for other in other_contributions {
                     contributions.push(parse_contribution(other));
                 }
@@ -112,6 +134,16 @@ pub mod plugin_manager {
                 println!("Plugin not found for {}", filename);
             }
         }
+
+        let title = metadata["title"].to_string();
+        let author = metadata["author"].to_string();
+
+        Ok(Plugin {
+            filename: filename.to_string(),
+            title,
+            author,
+            contributions,
+        })
     }
 
     fn parse_metadata_field(node: Node) -> (String, String) {

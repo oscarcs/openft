@@ -15,10 +15,11 @@ const MAP_SIZE: usize = 200;
 
 #[macroquad::main("OpenFT")]
 async fn main() {
-    let plugins = enumerate_plugins().expect("Plugins not found!");
-    println!("{:?}", plugins);
+    let plugin_dirs = enumerate_plugins().expect("Plugins not found!");
+    println!("{:?}", plugin_dirs);
 
-    load_plugins(plugins);
+    let plugins = load_plugins(plugin_dirs);
+    println!("{:#?}", plugins);
 
     let mut zoom_level: f32 = 3.0;
 
