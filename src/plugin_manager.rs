@@ -5,26 +5,26 @@ pub mod plugin_manager {
 
     #[derive(Debug)]
     pub struct Plugin {
-        filename: String,
-        title: String,
-        author: String,
-        contributions: Vec<Contribution>,
+        pub filename: PathBuf,
+        pub title: String,
+        pub author: String,
+        pub contributions: Vec<Contribution>,
     }
 
     #[derive(Debug)]
-    struct Contribution {
-        size_x: i32,
-        size_y: i32,
-        height: i32,
-        sprites: Vec<ContributionSprite>,
+    pub struct Contribution {
+        pub size_x: i32,
+        pub size_y: i32,
+        pub height: i32,
+        pub sprites: Vec<ContributionSprite>,
     }
 
     #[derive(Debug)]
-    struct ContributionSprite {
-        origin_x: i32,
-        origin_y: i32,
-        offset: i32,
-        picture_ref: String,
+    pub struct ContributionSprite {
+        pub origin_x: i32,
+        pub origin_y: i32,
+        pub offset: i32,
+        pub picture_ref: String,
     }
 
     #[derive(Debug)]
@@ -44,8 +44,8 @@ pub mod plugin_manager {
     pub fn load_plugins(plugin_paths: Vec<PathBuf>) -> Vec<Plugin> {
         let mut plugins = Vec::new();
 
-        for plugin in plugin_paths {
-            let mut xml = plugin.clone();
+        for path in plugin_paths {
+            let mut xml = path.clone();
             xml.push("plugin.xml");
 
             let xml_bytes = match fs::read(xml) {
@@ -53,7 +53,7 @@ pub mod plugin_manager {
                 Err(_) => {
                     println!(
                         "Warning: Plugin {} does not have a root file",
-                        plugin.display()
+                        path.display()
                     );
                     continue;
                 }
@@ -64,7 +64,7 @@ pub mod plugin_manager {
                 (xml_data, _, _) = SHIFT_JIS.decode(&xml_bytes);
             }
 
-            let res = parse_plugin_xml(&plugin.display().to_string(), &xml_data);
+            let res = parse_plugin_xml(path, &xml_data);
 
             match res {
                 Ok(plugin) => plugins.push(plugin),
@@ -77,7 +77,7 @@ pub mod plugin_manager {
         plugins
     }
 
-    pub fn parse_plugin_xml(filename: &str, data: &str) -> Result<Plugin, PluginError> {
+    pub fn parse_plugin_xml(filename: PathBuf, data: &str) -> Result<Plugin, PluginError> {
         let options = ParsingOptions {
             allow_dtd: true,
             ..Default::default()
@@ -131,7 +131,7 @@ pub mod plugin_manager {
                 resolve_contribution_refs(&picture_contributions, &mut contributions);
             }
             None => {
-                println!("Plugin not found for {}", filename);
+                println!("Plugin not found for {}", filename.display());
             }
         }
 
@@ -139,7 +139,7 @@ pub mod plugin_manager {
         let author = metadata["author"].to_string();
 
         Ok(Plugin {
-            filename: filename.to_string(),
+            filename,
             title,
             author,
             contributions,
