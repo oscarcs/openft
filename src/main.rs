@@ -113,8 +113,6 @@ async fn main() {
             zoom_level,
         );
 
-        // let screen_iso = xy_to_iso(screen_xy_origin);
-
         let (lower, upper) = min_iso_bounding_box_for_xy((screen_xy_extent, screen_xy_origin));
         let x0 = lower.x.max(0) as usize;
         let x1 = upper.x.max(0) as usize;
@@ -138,17 +136,7 @@ async fn main() {
                 };
 
                 let val = map[tx][ty];
-                draw(&textures[0], pos_screen, val, color, zoom_level); // ground
-                                                                        // if val > 5 {
-                                                                        //     draw(
-                                                                        //         &textures[(val - 5) as usize],
-                                                                        //         pos_screen,
-                                                                        //         0,
-                                                                        //         color,
-                                                                        //         zoom_level,
-                                                                        //     ); // houses
-                                                                        // } else {
-                                                                        // }
+                draw(&textures[0], pos_screen, val, color, zoom_level);
 
                 calls += 1;
             }
