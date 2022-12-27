@@ -1,5 +1,3 @@
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
-
 use macroquad::prelude::*;
 use plugin_manager::plugin_manager::*;
 use texture_manager::texture_manager::*;
@@ -17,62 +15,30 @@ const MAP_SIZE: usize = 200;
 
 #[macroquad::main("OpenFT")]
 async fn main() {
+    let mut drawables = Vec::<Drawable>::new();
     let mut texture = Texture2D::empty();
     load_process_texture(&mut texture, "res/EmptyChip.png").await;
 
-    let mut drawables = Vec::<Drawable>::new();
     for i in 0..4 {
         let drawable = Drawable {
             texture: &texture,
             offset: Vec2 { x: 0.0, y: 0.0 },
-            origin: Vec2 { x: (TILE_W * i) as f32, y: 0.0 },
+            origin: Vec2 {
+                x: (TILE_W * i) as f32,
+                y: 0.0,
+            },
             width: TILE_W as f32,
-            height: TILE_H as f32
+            height: TILE_H as f32,
         };
         drawables.push(drawable);
     }
 
     let plugin_dirs = enumerate_plugins().expect("Plugins not found!");
     let plugins = load_plugins(plugin_dirs);
+    let plugin_textures = load_plugin_textures(&plugins).await;
+    load_drawables_from_plugins(&mut drawables, &plugins, &plugin_textures);
 
-    let mut plugin_textures = HashMap::<String, Texture2D>::new();
-    for plugin in &plugins {
-        for contribution in &plugin.contributions {
-            let first_sprite = contribution.sprites.first().unwrap(); //todo
-            let mut texture_path = plugin.filename.clone();
-            texture_path.push(first_sprite.picture_ref.as_str());
-            
-            // Load the texture into GPU memory if it isn't already
-            let texture_key = texture_path.to_str().unwrap();
-            if !plugin_textures.contains_key(texture_key) {
-                let mut texture = Texture2D::empty();
-                load_process_texture(&mut texture, texture_key).await;
-                plugin_textures.insert(texture_key.to_owned(), texture);
-            }
-        }
-    }
-
-    for plugin in &plugins {
-        for contribution in &plugin.contributions {
-            let first_sprite = contribution.sprites.first().unwrap(); //todo
-            let mut texture_path = plugin.filename.clone();
-            texture_path.push(first_sprite.picture_ref.as_str());
-            let texture_key = texture_path.to_str().unwrap();
-            
-            let (w, h) = min_xy_bounding_box_for_iso_size(contribution.size_x, contribution.size_y);
-        
-            drawables.push(Drawable {
-                height: (h + first_sprite.offset) as f32,
-                width: w as f32,
-                offset: Vec2 { x: 0.0, y: first_sprite.offset as f32 },
-                origin: Vec2 { x: first_sprite.origin_x as f32, y: first_sprite.origin_y as f32 },
-                texture: &plugin_textures.get(texture_key).unwrap()
-            });
-            println!("added drawable {}", texture_key);
-        }
-    }
-
-    let mut zoom_level: f32 = 3.0;
+    let mut zoom_level: f32 = 2.0;
 
     let water = Color {
         r: 81.0 / 255.0,
@@ -81,10 +47,7 @@ async fn main() {
         a: 1.0,
     };
 
-    let mut camera: Vec2 = Vec2 {
-        x: 0.0,
-        y: 0.0,
-    };
+    let mut camera: Vec2 = Vec2 { x: 0.0, y: 0.0 };
 
     let mut map: [[u32; MAP_SIZE]; MAP_SIZE] = [[0; MAP_SIZE]; MAP_SIZE];
 
@@ -187,7 +150,7 @@ async fn main() {
 
                 let val = map[tx][ty];
                 draw(&drawables[val as usize], pos_screen, color, zoom_level);
-                
+
                 calls += 1;
             }
         }
@@ -295,8 +258,5 @@ fn min_iso_bounding_box_for_xy(p: (Vec2, Vec2)) -> (Tile, Tile) {
 
 /// Size of the x,y bounding box that will cover w x h tiles.
 fn min_xy_bounding_box_for_iso_size(w: i32, h: i32) -> (i32, i32) {
-    (
-        (w + h) * TILE_W_HALF,
-        (w + h) * TILE_H_HALF,
-    )
+    ((w + h) * TILE_W_HALF, (w + h) * TILE_H_HALF)
 }
