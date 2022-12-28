@@ -1,5 +1,8 @@
 pub mod texture_manager {
-    use crate::{min_xy_bounding_box_for_iso_size, plugin_manager::plugin_manager::Plugin};
+    use crate::{
+        min_xy_bounding_box_for_iso_size,
+        plugin_manager::plugin_manager::{Contribution, ContributionImageData, Plugin},
+    };
     use macroquad::prelude::*;
     use std::collections::HashMap;
 
@@ -17,8 +20,16 @@ pub mod texture_manager {
         a: 0.0,
     };
 
-    pub struct Drawable<'a> {
+    pub struct DrawableTileData<'a> {
         pub texture: &'a Texture2D,
+        pub image_data: ImageData,
+    }
+
+    pub enum ImageData {
+        SingleDrawable(Drawable),
+    }
+
+    pub struct Drawable {
         pub offset: Vec2,
         pub origin: Vec2,
         pub width: f32,
@@ -29,62 +40,72 @@ pub mod texture_manager {
         let mut plugin_textures = HashMap::<String, Texture2D>::new();
         for plugin in plugins {
             for contribution in &plugin.contributions {
-                for sprite in &contribution.sprites {
-                    let mut texture_path = plugin.filename.clone();
-                    texture_path.push(sprite.picture_ref.as_str());
+                let mut texture_path = plugin.filename.clone();
+                texture_path.push(contribution.image_ref.as_str());
+                let texture_full_path = texture_path.to_str().unwrap();
 
-                    // Load the texture into GPU memory if it isn't already
-                    let texture_key = texture_path.to_str().unwrap();
-                    if !plugin_textures.contains_key(texture_key) {
-                        let mut texture = Texture2D::empty();
-                        load_process_texture(&mut texture, texture_key).await;
-                        plugin_textures.insert(texture_key.to_owned(), texture);
-                    }
+                let key = format!("{}-{}", plugin.title, contribution.image_ref);
+
+                // Load the texture into GPU memory if it isn't already
+                if !plugin_textures.contains_key(&key) {
+                    let mut texture = Texture2D::empty();
+                    load_process_texture(&mut texture, texture_full_path).await;
+                    plugin_textures.insert(key.to_owned(), texture);
                 }
             }
         }
         plugin_textures
     }
 
-    pub fn load_drawables_from_plugins<'a>(
-        drawables: &mut Vec<Drawable<'a>>,
-        plugins: &Vec<Plugin>,
-        plugin_textures: &'a HashMap<String, Texture2D>,
-    ) {
-        for plugin in plugins {
-            for contribution in &plugin.contributions {
-                let (w, h) =
-                    min_xy_bounding_box_for_iso_size(contribution.size_x, contribution.size_y);
+    pub fn load_drawable_tile_data_from_contribution<'a>(
+        contribution: Contribution,
+        title: &str,
+        textures: &'a HashMap<String, Texture2D>,
+    ) -> DrawableTileData<'a> {
+        let (w, h) = min_xy_bounding_box_for_iso_size(contribution.x, contribution.y);
 
-                for sprite in &contribution.sprites {
-                    let mut texture_path = plugin.filename.clone();
-                    texture_path.push(sprite.picture_ref.as_str());
+        let key = format!("{}-{}", title, contribution.image_ref);
 
-                    let texture_key = texture_path.to_str().unwrap();
+        let texture = match textures.get(&key) {
+            Some(texture) => texture,
+            None => panic!(
+                "Warning: couldn't retrieve texture '{}' while loading tile data",
+                key
+            ),
+        };
 
-                    let texture = match plugin_textures.get(texture_key) {
-                        Some(texture) => texture,
-                        None => {
-                            println!("Warning: couldn't retrieve texture '{}' while loading Drawable", texture_key);
-                            continue;
-                        } 
-                    };
-
-                    drawables.push(Drawable {
-                        height: (h + sprite.offset) as f32,
-                        width: w as f32,
-                        offset: Vec2 {
-                            x: 0.0,
-                            y: sprite.offset as f32,
-                        },
-                        origin: Vec2 {
-                            x: sprite.origin_x as f32,
-                            y: sprite.origin_y as f32,
-                        },
-                        texture,
-                    });
-                }
+        let image_data = match contribution.image_data.len() {
+            0 => panic!("No image data found!"),
+            1 => &contribution.image_data[0],
+            x => {
+                println!("Found {} sets of image data for contribution, using only the first one for now.", x);
+                &contribution.image_data[0]
             }
+        };
+
+        let drawable = match image_data {
+            ContributionImageData::ContributionSprite(s) => Drawable {
+                offset: Vec2 {
+                    x: 0.0,
+                    y: s.offset as f32,
+                },
+                origin: Vec2 {
+                    x: s.origin_x as f32,
+                    y: s.origin_y as f32,
+                },
+                width: w as f32,
+                height: (h + s.offset) as f32,
+            },
+            ContributionImageData::ContributionPictures(_) => {
+                todo!("Multi-part image data not supported yet");
+            }
+        };
+
+        let image_data = ImageData::SingleDrawable(drawable);
+
+        DrawableTileData {
+            texture,
+            image_data,
         }
     }
 
@@ -135,7 +156,21 @@ pub mod texture_manager {
         }
     }
 
-    pub fn draw(drawable: &Drawable, destination: Vec2, color: Color, scale: f32) {
+    pub fn draw_tile(tile: &DrawableTileData, destination: Vec2, color: Color, scale: f32) {
+        match &tile.image_data {
+            ImageData::SingleDrawable(image) => {
+                draw(&image, &tile.texture, destination, color, scale);
+            }
+        }
+    }
+
+    pub fn draw(
+        drawable: &Drawable,
+        texture: &Texture2D,
+        destination: Vec2,
+        color: Color,
+        scale: f32,
+    ) {
         let params = DrawTextureParams {
             dest_size: Some(Vec2 {
                 x: drawable.width * scale,
@@ -151,7 +186,7 @@ pub mod texture_manager {
         };
 
         draw_texture_ex(
-            *drawable.texture,
+            *texture,
             destination.x - (drawable.offset.x * scale),
             destination.y - (drawable.offset.y * scale),
             color,

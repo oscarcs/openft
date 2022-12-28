@@ -15,28 +15,35 @@ const MAP_SIZE: usize = 200;
 
 #[macroquad::main("OpenFT")]
 async fn main() {
-    let mut drawables = Vec::<Drawable>::new();
+    let mut tile_data = Vec::<DrawableTileData>::new(); 
+
     let mut texture = Texture2D::empty();
     load_process_texture(&mut texture, "res/EmptyChip.png").await;
 
     for i in 0..4 {
-        let drawable = Drawable {
+        let tile = DrawableTileData {
             texture: &texture,
-            offset: Vec2 { x: 0.0, y: 0.0 },
-            origin: Vec2 {
-                x: (TILE_W * i) as f32,
-                y: 0.0,
-            },
-            width: TILE_W as f32,
-            height: TILE_H as f32,
+            image_data: ImageData::SingleDrawable(Drawable {
+                offset: Vec2 { x: 0.0, y: 0.0 },
+                origin: Vec2 {
+                    x: (TILE_W * i) as f32,
+                    y: 0.0,
+                },
+                width: TILE_W as f32,
+                height: TILE_H as f32,
+            })
         };
-        drawables.push(drawable);
+        tile_data.push(tile);
     }
 
     let plugin_dirs = enumerate_plugins().expect("Plugins not found!");
     let plugins = load_plugins(plugin_dirs);
     let plugin_textures = load_plugin_textures(&plugins).await;
-    load_drawables_from_plugins(&mut drawables, &plugins, &plugin_textures);
+    for plugin in plugins {
+        for contribution in plugin.contributions {
+            tile_data.push(load_drawable_tile_data_from_contribution(contribution, &plugin.title, &plugin_textures));
+        }
+    }
 
     let mut zoom_level: f32 = 2.0;
 
@@ -112,7 +119,7 @@ async fn main() {
         if is_mouse_button_pressed(MouseButton::Left) {
             let mouse_xy = screen_to_xy(mouse_pos, camera, zoom_level);
             let mouse_iso = xy_to_iso(mouse_xy);
-            let new_value = rand::gen_range(4, drawables.len());
+            let new_value = rand::gen_range(4, tile_data.len());
             map[mouse_iso.x.max(0) as usize][mouse_iso.y.max(0) as usize] = new_value as u32;
         }
 
@@ -149,7 +156,8 @@ async fn main() {
                 };
 
                 let val = map[tx][ty];
-                draw(&drawables[val as usize], pos_screen, color, zoom_level);
+                let data = &tile_data[val as usize];
+                draw_tile(data, pos_screen, color, zoom_level);
 
                 calls += 1;
             }

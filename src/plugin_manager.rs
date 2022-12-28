@@ -13,10 +13,17 @@ pub mod plugin_manager {
 
     #[derive(Debug)]
     pub struct Contribution {
-        pub size_x: i32,
-        pub size_y: i32,
-        pub height: i32,
-        pub sprites: Vec<ContributionSprite>,
+        pub x: i32,
+        pub y: i32,
+        pub z: i32,
+        pub image_ref: String,
+        pub image_data: Vec<ContributionImageData>,
+    }
+
+    #[derive(Debug)]
+    pub enum ContributionImageData {
+        ContributionSprite(ContributionSprite),
+        ContributionPictures(ContributionPictures),
     }
 
     #[derive(Debug)]
@@ -24,7 +31,13 @@ pub mod plugin_manager {
         pub origin_x: i32,
         pub origin_y: i32,
         pub offset: i32,
-        pub picture_ref: String,
+    }
+
+    #[derive(Debug)]
+    pub struct ContributionPictures {
+        pub top: ContributionSprite,
+        pub middle: ContributionSprite,
+        pub bottom: ContributionSprite,
     }
 
     #[derive(Debug)]
@@ -194,9 +207,51 @@ pub mod plugin_manager {
             metadata.insert(k, v);
         }
 
+        let (sprites, sprite_ref) = parse_generic_structure_sprite(node);
+        let (pictures, picture_ref) = parse_generic_structure_pictures(node);
+
+        let image_data = match (sprites.len(), pictures.len()) {
+            (_, 0) => sprites
+                .into_iter()
+                .map(|x| ContributionImageData::ContributionSprite(x))
+                .collect::<Vec<ContributionImageData>>(),
+
+            (0, _) => pictures
+                .into_iter()
+                .map(|x| ContributionImageData::ContributionPictures(x))
+                .collect::<Vec<ContributionImageData>>(),
+
+            _ => panic!("No image data found"),
+        };
+
+        let image_ref = match (sprite_ref.is_empty(), picture_ref.is_empty()) {
+            (false, true) => sprite_ref,
+            (true, false) => picture_ref,
+            _ => panic!("No image reference data found"),
+        };
+
+        let size = &metadata["size"];
+        let sizes: Vec<_> = size.split(",").collect();
+        let size_x: i32 = sizes[0].parse().unwrap_or(0);
+        let size_y: i32 = sizes[1].parse().unwrap_or(0);
+
+        let height = metadata["height"].parse().unwrap_or(0);
+
+        Contribution {
+            x: size_x,
+            y: size_y,
+            z: height,
+            image_data,
+            image_ref,
+        }
+    }
+
+    fn parse_generic_structure_sprite(node: Node) -> (Vec<ContributionSprite>, String) {
         let sprite_nodes = node
             .children()
             .filter(|x| x.is_element() && x.tag_name().name() == "sprite");
+
+        let mut image_ref: String = String::new();
 
         let mut sprites = Vec::new();
         for sprite_node in sprite_nodes {
@@ -212,29 +267,31 @@ pub mod plugin_manager {
                 .children()
                 .find(|x| x.is_element() && x.tag_name().name() == "picture")
                 .unwrap();
-            let picture_ref = picture_node.attribute("ref").unwrap().to_string(); //todo
+
+            match picture_node.attribute("ref") {
+                Some(x) => {
+                    if image_ref.is_empty() {
+                        image_ref = x.to_string()
+                    } else {
+                        if x != image_ref {
+                            panic!("Sprites on a contribution have different image refs.");
+                        }
+                    }
+                }
+                None => (),
+            }
 
             sprites.push(ContributionSprite {
                 origin_x,
                 origin_y,
                 offset,
-                picture_ref,
             });
         }
+        (sprites, image_ref)
+    }
 
-        let size = &metadata["size"];
-        let sizes: Vec<_> = size.split(",").collect();
-        let size_x: i32 = sizes[0].parse().unwrap_or(0);
-        let size_y: i32 = sizes[1].parse().unwrap_or(0);
-
-        let height = metadata["height"].parse().unwrap_or(0);
-
-        Contribution {
-            size_x,
-            size_y,
-            height,
-            sprites,
-        }
+    fn parse_generic_structure_pictures(node: Node) -> (Vec<ContributionPictures>, String) {
+        (Vec::new(), String::new())
     }
 
     fn resolve_contribution_refs(
@@ -242,9 +299,7 @@ pub mod plugin_manager {
         contributions: &mut Vec<Contribution>,
     ) {
         for contribution in contributions {
-            for sprite in &mut contribution.sprites {
-                sprite.picture_ref = picture_contributions[&sprite.picture_ref].clone();
-            }
+            contribution.image_ref = picture_contributions[&contribution.image_ref].clone();
         }
     }
 }
