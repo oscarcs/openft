@@ -15,10 +15,14 @@ const MAP_SIZE: usize = 200;
 
 #[macroquad::main("OpenFT")]
 async fn main() {
-    let mut tile_data = Vec::<DrawableTileData>::new(); 
+    let mut tile_data = Vec::<DrawableTileData>::new();
 
     let mut texture = Texture2D::empty();
-    load_process_texture(&mut texture, "res/EmptyChip.png").await;
+    let no_mapping = &ColorMapping {
+        target: WHITE,
+        channel: ColorMappingChannel::None,
+    };
+    load_process_texture(&mut texture, "res/GroundSeasonal.png", no_mapping).await;
 
     for i in 0..4 {
         let tile = DrawableTileData {
@@ -31,7 +35,7 @@ async fn main() {
                 },
                 width: TILE_W as f32,
                 height: TILE_H as f32,
-            })
+            }),
         };
         tile_data.push(tile);
     }
@@ -41,7 +45,11 @@ async fn main() {
     let plugin_textures = load_plugin_textures(&plugins).await;
     for plugin in plugins {
         for contribution in plugin.contributions {
-            tile_data.push(load_drawable_tile_data_from_contribution(contribution, &plugin.title, &plugin_textures));
+            tile_data.append(&mut load_drawable_tile_data_from_contribution(
+                contribution,
+                &plugin.title,
+                &plugin_textures,
+            ));
         }
     }
 

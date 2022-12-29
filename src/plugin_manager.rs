@@ -1,5 +1,6 @@
 pub mod plugin_manager {
     use encoding_rs::*;
+    use macroquad::prelude::{Color, BLACK};
     use roxmltree::{Error, Node, ParsingOptions};
     use std::{collections::HashMap, fs, io, path::PathBuf};
 
@@ -18,6 +19,7 @@ pub mod plugin_manager {
         pub z: i32,
         pub image_ref: String,
         pub image_data: Vec<ContributionImageData>,
+        pub color_mappings: Vec<ColorMapping>,
     }
 
     #[derive(Debug)]
@@ -27,17 +29,31 @@ pub mod plugin_manager {
     }
 
     #[derive(Debug)]
+    pub struct ContributionPictures {
+        pub top: ContributionSprite,
+        pub middle: ContributionSprite,
+        pub bottom: ContributionSprite,
+    }
+
+    #[derive(Debug)]
     pub struct ContributionSprite {
         pub origin_x: i32,
         pub origin_y: i32,
         pub offset: i32,
     }
 
-    #[derive(Debug)]
-    pub struct ContributionPictures {
-        pub top: ContributionSprite,
-        pub middle: ContributionSprite,
-        pub bottom: ContributionSprite,
+    #[derive(Debug, Clone, Copy)]
+    pub struct ColorMapping {
+        pub target: Color,
+        pub channel: ColorMappingChannel,
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    pub enum ColorMappingChannel {
+        None,
+        Red,
+        Green,
+        Blue,
     }
 
     #[derive(Debug)]
@@ -197,15 +213,23 @@ pub mod plugin_manager {
     }
 
     fn parse_generic_structure_contribution(node: Node) -> Contribution {
-        let metadata_nodes = node
-            .children()
-            .filter(|x| x.is_element() && x.children().all(|y| !y.is_element()));
+        let metadata_nodes = node.children().filter(|x| {
+            x.is_element() && x.has_children() && x.children().all(|y| !y.is_element())
+        });
 
         let mut metadata = HashMap::new();
         for metadata_node in metadata_nodes {
             let (k, v) = parse_metadata_field(metadata_node);
             metadata.insert(k, v);
         }
+
+        let mut color_mappings = parse_hue_transform_nodes(node);
+        if color_mappings.len() == 0 {
+            color_mappings.push(ColorMapping {
+                channel: ColorMappingChannel::None,
+                target: BLACK,
+            });
+        };
 
         let (sprites, sprite_ref) = parse_generic_structure_sprite(node);
         let (pictures, picture_ref) = parse_generic_structure_pictures(node);
@@ -243,7 +267,104 @@ pub mod plugin_manager {
             z: height,
             image_data,
             image_ref,
+            color_mappings,
         }
+    }
+
+    fn parse_hue_transform_nodes(node: Node) -> Vec<ColorMapping> {
+        let hue_transform_nodes = node.children().filter(|x| {
+            x.is_element()
+                && x.tag_name().name() == "spriteType"
+                && x.has_attribute("name")
+                && x.attribute("name").unwrap() == "hueTransform"
+        });
+
+        let mut color_mappings = Vec::new();
+
+        for hue_transform_node in hue_transform_nodes {
+            let mapping = match hue_transform_node
+                .children()
+                .find(|x| x.tag_name().name() == "map")
+            {
+                Some(map) => {
+                    if map.has_attribute("from") && map.has_attribute("to") {
+                        let from = map.attribute("from").unwrap();
+                        let to = map.attribute("to").unwrap();
+
+                        let from_elements: Vec<_> = from.split(",").collect();
+                        let to_elements: Vec<_> = to.split(",").collect();
+
+                        match from_elements.len() {
+                            3 => match to_elements.len() {
+                                3 => {
+                                    let channel = match from_elements.iter().position(|x| *x == "*")
+                                    {
+                                        Some(idx) => match idx {
+                                            0 => ColorMappingChannel::Red,
+                                            1 => ColorMappingChannel::Green,
+                                            2 => ColorMappingChannel::Blue,
+                                            _ => continue,
+                                        },
+                                        None => continue,
+                                    };
+
+                                    let target = match parse_target_color_for_mapping(&to_elements)
+                                    {
+                                        Ok(t) => t,
+                                        Err(_) => continue,
+                                    };
+
+                                    ColorMapping { channel, target }
+                                }
+                                _ => continue,
+                            },
+                            1 => {
+                                let channel = match from {
+                                    "red" | "Red" | "r" | "R" => ColorMappingChannel::Red,
+                                    "blue" | "Blue" | "b" | "B" => ColorMappingChannel::Blue,
+                                    "green" | "Green" | "g" | "G" => ColorMappingChannel::Green,
+                                    _ => continue,
+                                };
+
+                                let target = match parse_target_color_for_mapping(&to_elements) {
+                                    Ok(t) => t,
+                                    Err(_) => continue,
+                                };
+
+                                match to_elements.len() {
+                                    3 => ColorMapping { channel, target },
+                                    _ => continue,
+                                }
+                            }
+                            _ => continue,
+                        }
+                    } else {
+                        println!(
+                            "A hue transform mapping doesn't have 'from' and 'to' properties."
+                        );
+                        continue;
+                    }
+                }
+                None => {
+                    println!("A hue transform node doesn't have a <map> element.");
+                    continue;
+                }
+            };
+
+            color_mappings.push(mapping);
+        }
+
+        color_mappings
+    }
+
+    fn parse_target_color_for_mapping(
+        elements: &Vec<&str>,
+    ) -> Result<Color, std::num::ParseFloatError> {
+        let r = elements[0].parse::<f32>()? / 255.0;
+        let g = elements[1].parse::<f32>()? / 255.0;
+        let b = elements[2].parse::<f32>()? / 255.0;
+
+        Ok(Color { r, g, b, a: 1.0 })
     }
 
     fn parse_generic_structure_sprite(node: Node) -> (Vec<ContributionSprite>, String) {
