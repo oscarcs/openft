@@ -25,7 +25,7 @@ pub mod plugin_manager {
     pub enum ContributionImageData {
         ContributionSprite(ContributionSprite),
         ContributionMultistorey(ContributionMultistorey),
-        ContributionAutotile(ContributionAutotile, usize)
+        ContributionAutotile(ContributionAutotile, usize),
     }
 
     #[derive(Debug)]
@@ -36,9 +36,7 @@ pub mod plugin_manager {
     }
 
     #[derive(Debug)]
-    pub struct ContributionAutotile {
-
-    }
+    pub struct ContributionAutotile {}
 
     #[derive(Debug)]
     pub struct ContributionSprite {
@@ -210,7 +208,7 @@ pub mod plugin_manager {
             Some(contrib_type) => match contrib_type {
                 "GenericStructure" => {
                     return parse_generic_structure_contribution(node);
-                },
+                }
                 "road" => {
                     return parse_road_contribution(node);
                 }
@@ -295,8 +293,8 @@ pub mod plugin_manager {
         // let metadata = parse_metadata(node);
 
         let sprite_node = node
-        .children()
-        .find(|x| x.is_element() && x.tag_name().name() == "picture");
+            .children()
+            .find(|x| x.is_element() && x.tag_name().name() == "picture");
 
         let image_ref: String;
 
@@ -308,19 +306,15 @@ pub mod plugin_manager {
 
                 image_ref = src.to_owned();
                 println!("{} {} {}", src, size, offset);
-            },
-            None => panic!("No image data found!")
+            }
+            None => panic!("No image data found!"),
         }
 
         Contribution {
-            size: Tile {
-                x: 1,
-                y: 1,
-                z: 1,
-            },
+            size: Tile { x: 1, y: 1, z: 1 },
             image_ref,
             image_data: vec![],
-            color_mappings: vec![]
+            color_mappings: vec![],
         }
     }
 
@@ -474,22 +468,33 @@ pub mod plugin_manager {
         let picture_nodes = node
             .children()
             .filter(|x| x.is_element() && x.tag_name().name() == "pictures");
-        
+
         let mut image_ref: String = String::new();
 
         let mut sprites = Vec::new();
         for picture_node in picture_nodes {
-
-            let top_node = picture_node.children().find(|x| x.has_tag_name("top")).unwrap();
+            let top_node = picture_node
+                .children()
+                .find(|x| x.has_tag_name("top"))
+                .unwrap();
             let top = parse_origin_and_offset(top_node);
 
-            let middle_node = picture_node.children().find(|x| x.has_tag_name("middle")).unwrap();
+            let middle_node = picture_node
+                .children()
+                .find(|x| x.has_tag_name("middle"))
+                .unwrap();
             let middle = parse_origin_and_offset(middle_node);
-            
-            let bottom_node = picture_node.children().find(|x| x.has_tag_name("bottom")).unwrap();
+
+            let bottom_node = picture_node
+                .children()
+                .find(|x| x.has_tag_name("bottom"))
+                .unwrap();
             let bottom = parse_origin_and_offset(bottom_node);
 
-            let top_picture = top_node.children().find(|x| x.has_tag_name("picture")).unwrap();
+            let top_picture = top_node
+                .children()
+                .find(|x| x.has_tag_name("picture"))
+                .unwrap();
 
             match top_picture.attribute("ref") {
                 Some(x) => {
@@ -509,18 +514,18 @@ pub mod plugin_manager {
                 top: ContributionSprite {
                     origin_x: top.0,
                     origin_y: top.1,
-                    offset: top.2 
+                    offset: top.2,
                 },
                 middle: ContributionSprite {
                     origin_x: middle.0,
                     origin_y: middle.1,
-                    offset: middle.2 
+                    offset: middle.2,
                 },
                 bottom: ContributionSprite {
                     origin_x: bottom.0,
                     origin_y: bottom.1,
-                    offset: bottom.2 
-                }
+                    offset: bottom.2,
+                },
             });
         }
 

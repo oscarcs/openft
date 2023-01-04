@@ -18,7 +18,7 @@ pub mod tilemap_manager {
 
     #[derive(Clone, Copy, Debug)]
     pub struct MapDataGround {
-        pub render_id: usize
+        pub render_id: usize,
     }
 
     #[derive(Debug)]
@@ -38,9 +38,7 @@ pub mod tilemap_manager {
     impl<'a> TileMap<'a> {
         pub fn new(size_x: usize, size_y: usize) -> TileMap<'a> {
             let empty = MapData {
-                ground: MapDataGround {
-                    render_id: 0
-                },
+                ground: MapDataGround { render_id: 0 },
                 entity_id: 0,
             };
 

@@ -1,7 +1,8 @@
 pub mod texture_manager {
     use crate::{
         plugin_manager::plugin_manager::{
-            ColorMapping, ColorMappingChannel, Contribution, ContributionImageData, Plugin, ContributionSprite,
+            ColorMapping, ColorMappingChannel, Contribution, ContributionImageData,
+            ContributionSprite, Plugin,
         },
         tilemap_manager::tilemap_manager::Tile,
         util::util::min_xy_bounding_box_for_iso_size,
@@ -33,7 +34,7 @@ pub mod texture_manager {
     #[derive(Debug)]
     pub enum ImageData {
         SingleDrawable(Drawable),
-        MultistoreyDrawable(Drawable, Drawable, Drawable)
+        MultistoreyDrawable(Drawable, Drawable, Drawable),
     }
 
     #[derive(Debug)]
@@ -100,13 +101,14 @@ pub mod texture_manager {
             };
 
             let image_data = match image_data {
-                ContributionImageData::ContributionSprite(s)
-                    => ImageData::SingleDrawable(contribution_sprite_to_drawable(s, w, h)),
+                ContributionImageData::ContributionSprite(s) => {
+                    ImageData::SingleDrawable(contribution_sprite_to_drawable(s, w, h))
+                }
                 ContributionImageData::ContributionMultistorey(s) => {
                     ImageData::MultistoreyDrawable(
                         contribution_sprite_to_drawable(&s.top, w, h),
                         contribution_sprite_to_drawable(&s.middle, w, h),
-                        contribution_sprite_to_drawable(&s.bottom, w, h)
+                        contribution_sprite_to_drawable(&s.bottom, w, h),
                     )
                 }
                 ContributionImageData::ContributionAutotile(_, _) => todo!(),
@@ -135,7 +137,7 @@ pub mod texture_manager {
             height: (h + s.offset) as f32,
         }
     }
-    
+
     pub async fn load_process_texture(
         texture: &mut Texture2D,
         filename: &str,
@@ -244,12 +246,30 @@ pub mod texture_manager {
                 let mut y = destination.y;
                 for _ in 1..=h {
                     y -= scale * (middle.height - middle.offset.y);
-                    draw(&middle, &tile.texture, Vec2 { x: destination.x, y }, color, scale);
+                    draw(
+                        &middle,
+                        &tile.texture,
+                        Vec2 {
+                            x: destination.x,
+                            y,
+                        },
+                        color,
+                        scale,
+                    );
                 }
 
                 y -= scale * (top.height - top.offset.y);
-                draw(&top, &tile.texture, Vec2 { x: destination.x, y }, color, scale);
-            },
+                draw(
+                    &top,
+                    &tile.texture,
+                    Vec2 {
+                        x: destination.x,
+                        y,
+                    },
+                    color,
+                    scale,
+                );
+            }
         }
     }
 
