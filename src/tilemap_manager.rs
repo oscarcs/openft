@@ -12,8 +12,13 @@ pub mod tilemap_manager {
 
     #[derive(Clone, Copy, Debug)]
     pub struct MapData {
-        pub ground_id: usize,
+        pub ground: MapDataGround,
         pub entity_id: usize,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct MapDataGround {
+        pub render_id: usize
     }
 
     #[derive(Debug)]
@@ -33,7 +38,9 @@ pub mod tilemap_manager {
     impl<'a> TileMap<'a> {
         pub fn new(size_x: usize, size_y: usize) -> TileMap<'a> {
             let empty = MapData {
-                ground_id: 0,
+                ground: MapDataGround {
+                    render_id: 0
+                },
                 entity_id: 0,
             };
 
@@ -59,7 +66,7 @@ pub mod tilemap_manager {
         }
 
         pub fn get_ground(&self, x: usize, y: usize) -> &DrawableTileData<'a> {
-            let idx = self.get(x, y).ground_id;
+            let idx = self.get(x, y).ground.render_id;
             &self.ground_drawables[idx]
         }
 
@@ -85,7 +92,7 @@ pub mod tilemap_manager {
         pub fn set_ground(&mut self, x: usize, y: usize, ground_id: usize) -> bool {
             match self.ground_drawables.get(ground_id) {
                 Some(_) => {
-                    self.data[x][y].ground_id = ground_id;
+                    self.data[x][y].ground.render_id = ground_id;
                     true
                 }
                 None => false,

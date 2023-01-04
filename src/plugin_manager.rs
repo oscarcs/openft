@@ -24,14 +24,20 @@ pub mod plugin_manager {
     #[derive(Debug)]
     pub enum ContributionImageData {
         ContributionSprite(ContributionSprite),
-        ContributionPictures(ContributionPictures),
+        ContributionMultistorey(ContributionMultistorey),
+        ContributionAutotile(ContributionAutotile, usize)
     }
 
     #[derive(Debug)]
-    pub struct ContributionPictures {
+    pub struct ContributionMultistorey {
         pub top: ContributionSprite,
         pub middle: ContributionSprite,
         pub bottom: ContributionSprite,
+    }
+
+    #[derive(Debug)]
+    pub struct ContributionAutotile {
+
     }
 
     #[derive(Debug)]
@@ -204,6 +210,9 @@ pub mod plugin_manager {
             Some(contrib_type) => match contrib_type {
                 "GenericStructure" => {
                     return parse_generic_structure_contribution(node);
+                },
+                "road" => {
+                    return parse_road_contribution(node);
                 }
                 other => panic!("Invalid or unimplemented contribution type '{}'", other),
             },
@@ -211,7 +220,7 @@ pub mod plugin_manager {
         }
     }
 
-    fn parse_generic_structure_contribution(node: Node) -> Contribution {
+    fn parse_metadata(node: Node) -> HashMap<String, String> {
         let metadata_nodes = node.children().filter(|x| {
             x.is_element() && x.has_children() && x.children().all(|y| !y.is_element())
         });
@@ -221,6 +230,11 @@ pub mod plugin_manager {
             let (k, v) = parse_metadata_field(metadata_node);
             metadata.insert(k, v);
         }
+        metadata
+    }
+
+    fn parse_generic_structure_contribution(node: Node) -> Contribution {
+        let mut metadata = parse_metadata(node);
 
         let mut color_mappings = parse_hue_transform_nodes(node);
         if color_mappings.len() == 0 {
@@ -241,7 +255,7 @@ pub mod plugin_manager {
 
             (0, _) => pictures
                 .into_iter()
-                .map(|x| ContributionImageData::ContributionPictures(x))
+                .map(|x| ContributionImageData::ContributionMultistorey(x))
                 .collect::<Vec<ContributionImageData>>(),
 
             _ => panic!("No image data found"),
@@ -270,6 +284,39 @@ pub mod plugin_manager {
             image_data,
             image_ref,
             color_mappings,
+        }
+    }
+
+    fn parse_road_contribution(node: Node) -> Contribution {
+        let metadata = parse_metadata(node);
+
+        let sprite_node = node
+        .children()
+        .find(|x| x.is_element() && x.tag_name().name() == "picture");
+
+        let image_ref: String;
+
+        match sprite_node {
+            Some(sprite) => {
+                let src = sprite.attribute("src").expect("No image data found!");
+                let size = sprite.attribute("size").unwrap_or("32,16");
+                let offset = sprite.attribute("offset").unwrap_or("0");
+
+                image_ref = src.to_owned();
+                println!("{} {} {}", src, size, offset);
+            },
+            None => panic!("No image data found!")
+        }
+
+        Contribution {
+            size: Tile {
+                x: 1,
+                y: 1,
+                z: 1,
+            },
+            image_ref,
+            image_data: vec![],
+            color_mappings: vec![]
         }
     }
 
@@ -413,7 +460,7 @@ pub mod plugin_manager {
         (sprites, image_ref)
     }
 
-    fn parse_generic_structure_pictures(_node: Node) -> (Vec<ContributionPictures>, String) {
+    fn parse_generic_structure_pictures(_node: Node) -> (Vec<ContributionMultistorey>, String) {
         (Vec::new(), String::new())
     }
 
@@ -422,7 +469,9 @@ pub mod plugin_manager {
         contributions: &mut Vec<Contribution>,
     ) {
         for contribution in contributions {
-            contribution.image_ref = picture_contributions[&contribution.image_ref].clone();
+            if picture_contributions.contains_key(&contribution.image_ref) {
+                contribution.image_ref = picture_contributions[&contribution.image_ref].clone();
+            }
         }
     }
 }

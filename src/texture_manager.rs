@@ -111,9 +111,10 @@ pub mod texture_manager {
                     width: w as f32,
                     height: (h + s.offset) as f32,
                 },
-                ContributionImageData::ContributionPictures(_) => {
+                ContributionImageData::ContributionMultistorey(_) => {
                     todo!("Multi-part image data not supported yet");
                 }
+                ContributionImageData::ContributionAutotile(_, _) => todo!(),
             };
 
             let image_data = ImageData::SingleDrawable(drawable);
