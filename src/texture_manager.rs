@@ -1,9 +1,10 @@
 pub mod texture_manager {
     use crate::{
-        min_xy_bounding_box_for_iso_size,
         plugin_manager::plugin_manager::{
             ColorMapping, ColorMappingChannel, Contribution, ContributionImageData, Plugin,
         },
+        tilemap_manager::tilemap_manager::Tile,
+        util::util::min_xy_bounding_box_for_iso_size,
     };
     use macroquad::prelude::*;
     use std::collections::HashMap;
@@ -22,15 +23,19 @@ pub mod texture_manager {
         a: 0.0,
     };
 
+    #[derive(Debug)]
     pub struct DrawableTileData<'a> {
         pub texture: &'a Texture2D,
         pub image_data: ImageData,
+        pub size: Tile,
     }
 
+    #[derive(Debug)]
     pub enum ImageData {
         SingleDrawable(Drawable),
     }
 
+    #[derive(Debug)]
     pub struct Drawable {
         pub offset: Vec2,
         pub origin: Vec2,
@@ -68,7 +73,7 @@ pub mod texture_manager {
         title: &str,
         textures: &'a HashMap<String, Texture2D>,
     ) -> Vec<DrawableTileData<'a>> {
-        let (w, h) = min_xy_bounding_box_for_iso_size(contribution.x, contribution.y);
+        let (w, h) = min_xy_bounding_box_for_iso_size(contribution.size.x, contribution.size.y);
 
         let key_base = format!("{}-{}", title, contribution.image_ref);
         let mut drawables = Vec::new();
@@ -116,6 +121,7 @@ pub mod texture_manager {
             drawables.push(DrawableTileData {
                 texture,
                 image_data,
+                size: contribution.size,
             });
         }
         drawables

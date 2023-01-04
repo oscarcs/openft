@@ -1,4 +1,5 @@
 pub mod plugin_manager {
+    use crate::tilemap_manager::tilemap_manager::Tile;
     use encoding_rs::*;
     use macroquad::prelude::{Color, BLACK};
     use roxmltree::{Error, Node, ParsingOptions};
@@ -14,9 +15,7 @@ pub mod plugin_manager {
 
     #[derive(Debug)]
     pub struct Contribution {
-        pub x: i32,
-        pub y: i32,
-        pub z: i32,
+        pub size: Tile,
         pub image_ref: String,
         pub image_data: Vec<ContributionImageData>,
         pub color_mappings: Vec<ColorMapping>,
@@ -256,15 +255,18 @@ pub mod plugin_manager {
 
         let size = &metadata["size"];
         let sizes: Vec<_> = size.split(",").collect();
-        let size_x: i32 = sizes[0].parse().unwrap_or(0);
-        let size_y: i32 = sizes[1].parse().unwrap_or(0);
+        // x and y are flipped in our coordinate system
+        let size_x: i32 = sizes[1].parse().unwrap_or(0);
+        let size_y: i32 = sizes[0].parse().unwrap_or(0);
 
         let height = metadata["height"].parse().unwrap_or(0);
 
         Contribution {
-            x: size_x,
-            y: size_y,
-            z: height,
+            size: Tile {
+                x: size_x,
+                y: size_y,
+                z: height,
+            },
             image_data,
             image_ref,
             color_mappings,
@@ -411,7 +413,7 @@ pub mod plugin_manager {
         (sprites, image_ref)
     }
 
-    fn parse_generic_structure_pictures(node: Node) -> (Vec<ContributionPictures>, String) {
+    fn parse_generic_structure_pictures(_node: Node) -> (Vec<ContributionPictures>, String) {
         (Vec::new(), String::new())
     }
 
