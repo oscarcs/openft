@@ -13,7 +13,7 @@ const CAMERA_SPEED: f32 = 4.0;
 const MAP_SIZE: usize = 200;
 
 #[macroquad::main("OpenFT")]
-async fn main<'a>() {
+async fn main() {
     let mut camera: Vec2 = Vec2 { x: 0.0, y: 0.0 };
     let mut map = TileMap::new(MAP_SIZE, MAP_SIZE);
 

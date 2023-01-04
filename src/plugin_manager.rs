@@ -234,7 +234,7 @@ pub mod plugin_manager {
     }
 
     fn parse_generic_structure_contribution(node: Node) -> Contribution {
-        let mut metadata = parse_metadata(node);
+        let metadata = parse_metadata(node);
 
         let mut color_mappings = parse_hue_transform_nodes(node);
         if color_mappings.len() == 0 {
@@ -245,7 +245,7 @@ pub mod plugin_manager {
         };
 
         let (sprites, sprite_ref) = parse_generic_structure_sprite(node);
-        let (pictures, picture_ref) = parse_generic_structure_pictures(node);
+        let (pictures, picture_ref) = parse_generic_structure_multi(node);
 
         let image_data = match (sprites.len(), pictures.len()) {
             (_, 0) => sprites
@@ -264,7 +264,8 @@ pub mod plugin_manager {
         let image_ref = match (sprite_ref.is_empty(), picture_ref.is_empty()) {
             (false, true) => sprite_ref,
             (true, false) => picture_ref,
-            _ => panic!("No image reference data found"),
+            (false, false) => panic!("Too many image reference data types"),
+            (true, true) => panic!("No image reference data found"),
         };
 
         let size = &metadata["size"];
@@ -273,7 +274,10 @@ pub mod plugin_manager {
         let size_x: i32 = sizes[1].parse().unwrap_or(0);
         let size_y: i32 = sizes[0].parse().unwrap_or(0);
 
-        let height = metadata["height"].parse().unwrap_or(0);
+        let height = match metadata.get("height") {
+            Some(h) => h.parse().unwrap_or(0),
+            None => 0,
+        };
 
         Contribution {
             size: Tile {
@@ -288,7 +292,7 @@ pub mod plugin_manager {
     }
 
     fn parse_road_contribution(node: Node) -> Contribution {
-        let metadata = parse_metadata(node);
+        // let metadata = parse_metadata(node);
 
         let sprite_node = node
         .children()
@@ -416,6 +420,18 @@ pub mod plugin_manager {
         Ok(Color { r, g, b, a: 1.0 })
     }
 
+    fn parse_origin_and_offset(node: Node) -> (i32, i32, i32) {
+        let origin = node.attribute("origin").unwrap(); //todo
+        let origins: Vec<_> = origin.split(",").collect();
+        let origin_x: i32 = origins[0].trim().parse().unwrap_or(0);
+        let origin_y: i32 = origins[1].trim().parse().unwrap_or(0);
+
+        let offset = node.attribute("offset").unwrap(); //todo
+        let offset = offset.parse().unwrap();
+
+        (origin_x, origin_y, offset)
+    }
+
     fn parse_generic_structure_sprite(node: Node) -> (Vec<ContributionSprite>, String) {
         let sprite_nodes = node
             .children()
@@ -425,13 +441,7 @@ pub mod plugin_manager {
 
         let mut sprites = Vec::new();
         for sprite_node in sprite_nodes {
-            let offset = sprite_node.attribute("offset").unwrap(); //todo
-            let offset = offset.parse().unwrap();
-
-            let origin = sprite_node.attribute("origin").unwrap(); //todo
-            let origins: Vec<_> = origin.split(",").collect();
-            let origin_x: i32 = origins[0].parse().unwrap_or(0);
-            let origin_y: i32 = origins[1].parse().unwrap_or(0);
+            let (origin_x, origin_y, offset) = parse_origin_and_offset(sprite_node);
 
             let picture_node = sprite_node
                 .children()
@@ -460,8 +470,61 @@ pub mod plugin_manager {
         (sprites, image_ref)
     }
 
-    fn parse_generic_structure_pictures(_node: Node) -> (Vec<ContributionMultistorey>, String) {
-        (Vec::new(), String::new())
+    fn parse_generic_structure_multi(node: Node) -> (Vec<ContributionMultistorey>, String) {
+        let picture_nodes = node
+            .children()
+            .filter(|x| x.is_element() && x.tag_name().name() == "pictures");
+        
+        let mut image_ref: String = String::new();
+
+        let mut sprites = Vec::new();
+        for picture_node in picture_nodes {
+
+            let top_node = picture_node.children().find(|x| x.has_tag_name("top")).unwrap();
+            let top = parse_origin_and_offset(top_node);
+
+            let middle_node = picture_node.children().find(|x| x.has_tag_name("middle")).unwrap();
+            let middle = parse_origin_and_offset(middle_node);
+            
+            let bottom_node = picture_node.children().find(|x| x.has_tag_name("bottom")).unwrap();
+            let bottom = parse_origin_and_offset(bottom_node);
+
+            let top_picture = top_node.children().find(|x| x.has_tag_name("picture")).unwrap();
+
+            match top_picture.attribute("ref") {
+                Some(x) => {
+                    if image_ref.is_empty() {
+                        image_ref = x.to_string()
+                    } else {
+                        if x != image_ref {
+                            //TODO: check the middle and bottom refs
+                            panic!("Sprites on a contribution have different image refs.");
+                        }
+                    }
+                }
+                None => (),
+            }
+
+            sprites.push(ContributionMultistorey {
+                top: ContributionSprite {
+                    origin_x: top.0,
+                    origin_y: top.1,
+                    offset: top.2 
+                },
+                middle: ContributionSprite {
+                    origin_x: middle.0,
+                    origin_y: middle.1,
+                    offset: middle.2 
+                },
+                bottom: ContributionSprite {
+                    origin_x: bottom.0,
+                    origin_y: bottom.1,
+                    offset: bottom.2 
+                }
+            });
+        }
+
+        (sprites, image_ref)
     }
 
     fn resolve_contribution_refs(
