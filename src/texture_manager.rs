@@ -1,7 +1,7 @@
 pub mod texture_manager {
     use crate::{
         plugin_manager::plugin_manager::{
-            ColorMapping, ColorMappingChannel, Contribution, ContributionImageData, Plugin,
+            ColorMapping, ColorMappingChannel, Contribution, ContributionImageData, Plugin, ContributionSprite,
         },
         tilemap_manager::tilemap_manager::Tile,
         util::util::min_xy_bounding_box_for_iso_size,
@@ -33,6 +33,7 @@ pub mod texture_manager {
     #[derive(Debug)]
     pub enum ImageData {
         SingleDrawable(Drawable),
+        MultistoreyDrawable(Drawable, Drawable, Drawable)
     }
 
     #[derive(Debug)]
@@ -93,31 +94,23 @@ pub mod texture_manager {
                 0 => panic!("No image data found!"),
                 1 => &contribution.image_data[0],
                 x => {
-                    println!("Found {} sets of image data for contribution, using only the first one for now.", x);
+                    //println!("Found {} sets of image data for contribution, using only the first one for now.", x);
                     &contribution.image_data[0]
                 }
             };
 
-            let drawable = match image_data {
-                ContributionImageData::ContributionSprite(s) => Drawable {
-                    offset: Vec2 {
-                        x: 0.0,
-                        y: s.offset as f32,
-                    },
-                    origin: Vec2 {
-                        x: s.origin_x as f32,
-                        y: s.origin_y as f32,
-                    },
-                    width: w as f32,
-                    height: (h + s.offset) as f32,
-                },
-                ContributionImageData::ContributionMultistorey(_) => {
-                    todo!("Multi-part image data not supported yet");
+            let image_data = match image_data {
+                ContributionImageData::ContributionSprite(s)
+                    => ImageData::SingleDrawable(contribution_sprite_to_drawable(s, w, h)),
+                ContributionImageData::ContributionMultistorey(s) => {
+                    ImageData::MultistoreyDrawable(
+                        contribution_sprite_to_drawable(&s.top, w, h),
+                        contribution_sprite_to_drawable(&s.middle, w, h),
+                        contribution_sprite_to_drawable(&s.bottom, w, h)
+                    )
                 }
                 ContributionImageData::ContributionAutotile(_, _) => todo!(),
             };
-
-            let image_data = ImageData::SingleDrawable(drawable);
 
             drawables.push(DrawableTileData {
                 texture,
@@ -128,6 +121,21 @@ pub mod texture_manager {
         drawables
     }
 
+    fn contribution_sprite_to_drawable(s: &ContributionSprite, w: i32, h: i32) -> Drawable {
+        Drawable {
+            offset: Vec2 {
+                x: 0.0,
+                y: s.offset as f32,
+            },
+            origin: Vec2 {
+                x: s.origin_x as f32,
+                y: s.origin_y as f32,
+            },
+            width: w as f32,
+            height: (h + s.offset) as f32,
+        }
+    }
+    
     pub async fn load_process_texture(
         texture: &mut Texture2D,
         filename: &str,
@@ -228,6 +236,20 @@ pub mod texture_manager {
             ImageData::SingleDrawable(image) => {
                 draw(&image, &tile.texture, destination, color, scale);
             }
+            ImageData::MultistoreyDrawable(top, middle, bottom) => {
+                let h = tile.size.z;
+
+                draw(&bottom, &tile.texture, destination, color, scale);
+
+                let mut y = destination.y;
+                for _ in 1..=h {
+                    y -= scale * (middle.height - middle.offset.y);
+                    draw(&middle, &tile.texture, Vec2 { x: destination.x, y }, color, scale);
+                }
+
+                y -= scale * (top.height - top.offset.y);
+                draw(&top, &tile.texture, Vec2 { x: destination.x, y }, color, scale);
+            },
         }
     }
 

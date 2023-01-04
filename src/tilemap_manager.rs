@@ -84,6 +84,10 @@ pub mod tilemap_manager {
             None
         }
 
+        pub fn entity_type_count(&self) -> usize {
+            self.entity_drawables.len()
+        }
+
         pub fn create_ground_type(&mut self, drawable: DrawableTileData<'a>) -> usize {
             self.ground_drawables.push(drawable);
             self.ground_drawables.len() - 1

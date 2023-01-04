@@ -1,4 +1,4 @@
-use macroquad::prelude::*;
+use macroquad::{prelude::*, rand::gen_range};
 use plugin_manager::plugin_manager::*;
 use texture_manager::texture_manager::*;
 use tilemap_manager::tilemap_manager::*;
@@ -111,7 +111,8 @@ async fn main() {
             let x_dest = mouse_iso.x.max(0) as usize;
             let y_dest = mouse_iso.y.max(0) as usize;
 
-            map.set_entity(x_dest, y_dest, 1);
+            let t = gen_range(0, map.entity_type_count());
+            map.set_entity(x_dest, y_dest, t);
         }
 
         let screen_xy_origin = screen_to_xy(Vec2 { x: 0.0, y: 0.0 }, camera, zoom_level);
