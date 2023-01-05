@@ -150,7 +150,7 @@ pub mod tilemap_manager {
             // Check that there is no existing entity within the area
             for x in x0..=x1 {
                 for y in y1..=y0 {
-                    if x > self.data.len() || y > self.data[0].len() {
+                    if x >= self.data.len() || y >= self.data[0].len() {
                         return false;
                     }
 

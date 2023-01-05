@@ -68,14 +68,24 @@ async fn main() {
 
     for x in 0..MAP_SIZE {
         for y in 0..MAP_SIZE {
+            if x % 5 == 0 || y % 5 == 0 {
+                map.set_ground(x, y, 3);
+                continue;
+            }
+
             let base_chance = (x * x) + (y * y);
 
-            if gen_range(0, base_chance) < 200 {
+            let r = gen_range(0, base_chance);
+            if r < 100 {
                 let t = gen_range(80, map.entity_type_count());
                 let entity_info = EntityInfo {
-                    height: gen_range(0, 7),
+                    height: gen_range(0, 4),
                 };
                 map.set_entity(x, y, t, Some(entity_info));
+            }
+            else if r < 200 {
+                let t = gen_range(60, 80);
+                map.set_entity(x, y, t, None);
             }
         }
     }
@@ -90,8 +100,6 @@ async fn main() {
     };
 
     loop {
-        let mut calls = 0;
-
         clear_background(water);
 
         let frame_time = get_frame_time();
@@ -174,29 +182,38 @@ async fn main() {
 
                 match map.get_entity(tx, ty) {
                     Some((entity, drawable, offset)) => {
-                        draw_entity(
-                            &entity.entity_info,
-                            drawable,
-                            offset,
-                            pos_screen,
-                            WHITE,
-                            zoom_level,
-                        );
-                        calls += match &entity.entity_info {
-                            Some(e) => e.height + 2,
-                            None => 1,
+                        if is_key_down(KeyCode::X) {
+                            draw_tile(map.get_ground(tx, ty), pos_screen, MAGENTA, zoom_level);
+                            draw_entity(
+                                &Some(EntityInfo { height: 0 }),
+                                drawable,
+                                offset,
+                                pos_screen,
+                                WHITE,
+                                zoom_level,
+                            );
+                        } else if is_key_down(KeyCode::Z) {
+                            draw_tile(map.get_ground(tx, ty), pos_screen, MAGENTA, zoom_level);
+                        } else {
+                            draw_entity(
+                                &entity.entity_info,
+                                drawable,
+                                offset,
+                                pos_screen,
+                                WHITE,
+                                zoom_level,
+                            );
                         }
                     }
                     None => {
                         draw_tile(map.get_ground(tx, ty), pos_screen, WHITE, zoom_level);
-                        calls += 1;
                     }
                 };
             }
         }
 
-        let str = format!("calls: {} / fps: {:.2}", calls, get_fps());
-        draw_text(&str, 20.0, 20.0, 30.0, RED);
+        let str = format!("fps: {:.2}", get_fps());
+        draw_text(&str, 10.0, 30.0, 30.0, WHITE);
 
         if is_key_down(KeyCode::Escape) {
             break;
