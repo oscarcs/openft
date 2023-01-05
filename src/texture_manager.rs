@@ -4,8 +4,8 @@ pub mod texture_manager {
             ColorMapping, ColorMappingChannel, Contribution, ContributionImageData,
             ContributionSprite, Plugin,
         },
-        tilemap_manager::tilemap_manager::Tile,
-        util::util::min_xy_bounding_box_for_iso_size,
+        tilemap_manager::tilemap_manager::{EntityInfo, Tile},
+        util::util::{min_xy_bounding_box_for_iso_size, TILE_H_HALF, TILE_W, TILE_W_HALF},
     };
     use macroquad::prelude::*;
     use std::collections::HashMap;
@@ -37,7 +37,7 @@ pub mod texture_manager {
         MultistoreyDrawable(Drawable, Drawable, Drawable),
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone, Copy)]
     pub struct Drawable {
         pub offset: Vec2,
         pub origin: Vec2,
@@ -91,34 +91,46 @@ pub mod texture_manager {
                 ),
             };
 
-            let image_data = match contribution.image_data.len() {
-                0 => panic!("No image data found!"),
-                1 => &contribution.image_data[0],
-                x => {
-                    //println!("Found {} sets of image data for contribution, using only the first one for now.", x);
-                    &contribution.image_data[0]
-                }
-            };
+            for id in &contribution.image_data {
+                let mut flip = false;
 
-            let image_data = match image_data {
-                ContributionImageData::ContributionSprite(s) => {
-                    ImageData::SingleDrawable(contribution_sprite_to_drawable(s, w, h))
-                }
-                ContributionImageData::ContributionMultistorey(s) => {
-                    ImageData::MultistoreyDrawable(
-                        contribution_sprite_to_drawable(&s.top, w, h),
-                        contribution_sprite_to_drawable(&s.middle, w, h),
-                        contribution_sprite_to_drawable(&s.bottom, w, h),
-                    )
-                }
-                ContributionImageData::ContributionAutotile(_, _) => todo!(),
-            };
+                let image_data = match id {
+                    ContributionImageData::ContributionSprite(s) => {
+                        if s.opposite {
+                            flip = true;
+                        }
+                        ImageData::SingleDrawable(contribution_sprite_to_drawable(s, w, h))
+                    }
+                    ContributionImageData::ContributionMultistorey(s) => {
+                        if s.top.opposite || s.middle.opposite || s.bottom.opposite {
+                            flip = true;
+                        }
+                        ImageData::MultistoreyDrawable(
+                            contribution_sprite_to_drawable(&s.top, w, h),
+                            contribution_sprite_to_drawable(&s.middle, w, h),
+                            contribution_sprite_to_drawable(&s.bottom, w, h),
+                        )
+                    }
+                    ContributionImageData::ContributionAutotile(_, _) => todo!(),
+                };
 
-            drawables.push(DrawableTileData {
-                texture,
-                image_data,
-                size: contribution.size,
-            });
+                let size = match flip {
+                    true => Tile {
+                        x: contribution.size.y,
+                        y: contribution.size.x,
+                        z: contribution.size.z,
+                    },
+                    false => contribution.size,
+                };
+
+                if size.x != size.y {}
+
+                drawables.push(DrawableTileData {
+                    texture,
+                    image_data,
+                    size,
+                });
+            }
         }
         drawables
     }
@@ -194,6 +206,22 @@ pub mod texture_manager {
         let w = image.width();
         let h = image.height();
 
+        // let (r, g, b) = (mapping.target.r, mapping.target.g, mapping.target.b);
+        let target: Color = mapping.target;
+
+        // if r > g && r > b {
+        //     target = RED;
+        // }
+        // else if g > r && g > b {
+        //     target = GREEN;
+        // }
+        // else if b > r && b > g {
+        //     target = BLUE;
+        // }
+        // else {
+        //     target = WHITE;
+        // }
+
         for x in 0..w {
             for y in 0..h {
                 let image_pixel = image.get_pixel(x as u32, y as u32);
@@ -222,13 +250,65 @@ pub mod texture_manager {
                 }
 
                 let color = Color {
-                    r: mapping.target.r * (brightness / 1.0),
-                    g: mapping.target.g * (brightness / 1.0),
-                    b: mapping.target.b * (brightness / 1.0),
+                    r: target.r * brightness,
+                    g: target.g * brightness,
+                    b: target.b * brightness,
                     a: 1.0,
                 };
 
                 image.set_pixel(x as u32, y as u32, color);
+            }
+        }
+    }
+
+    pub fn draw_entity(
+        entity_info: &Option<EntityInfo>,
+        tile: &DrawableTileData,
+        tile_offset: Tile,
+        destination: Vec2,
+        color: Color,
+        scale: f32,
+    ) {
+        match &tile.image_data {
+            ImageData::SingleDrawable(image) => {
+                let mut drawable = *image;
+
+                if tile.size.y > 1 {
+                    drawable.origin.x = drawable.origin.x + (TILE_W_HALF * tile_offset.y) as f32;
+                    drawable.offset.y = drawable.offset.y - (TILE_H_HALF * tile_offset.y) as f32;
+                    drawable.width = TILE_W as f32;
+                } else if tile.size.x > 1 {
+                    drawable.origin.x = drawable.origin.x + (TILE_W_HALF * tile_offset.x) as f32;
+                    drawable.offset.y = drawable.offset.y + (TILE_H_HALF * tile_offset.x) as f32;
+                    drawable.width = TILE_W as f32;
+                }
+
+                draw(&drawable, &tile.texture, destination, color, scale);
+            }
+            ImageData::MultistoreyDrawable(top, middle, bottom) => {
+                let h = match entity_info {
+                    Some(i) => i.height,
+                    None => 1,
+                };
+
+                draw(&bottom, &tile.texture, destination, color, scale);
+
+                let mut y = destination.y;
+                for _ in 1..=h {
+                    y -= scale * (middle.height - middle.offset.y);
+                    let dest = Vec2 {
+                        x: destination.x,
+                        y,
+                    };
+                    draw(&middle, &tile.texture, dest, color, scale);
+                }
+
+                y -= scale * (top.height - top.offset.y);
+                let dest = Vec2 {
+                    x: destination.x,
+                    y,
+                };
+                draw(&top, &tile.texture, dest, color, scale);
             }
         }
     }
@@ -238,38 +318,7 @@ pub mod texture_manager {
             ImageData::SingleDrawable(image) => {
                 draw(&image, &tile.texture, destination, color, scale);
             }
-            ImageData::MultistoreyDrawable(top, middle, bottom) => {
-                let h = tile.size.z;
-
-                draw(&bottom, &tile.texture, destination, color, scale);
-
-                let mut y = destination.y;
-                for _ in 1..=h {
-                    y -= scale * (middle.height - middle.offset.y);
-                    draw(
-                        &middle,
-                        &tile.texture,
-                        Vec2 {
-                            x: destination.x,
-                            y,
-                        },
-                        color,
-                        scale,
-                    );
-                }
-
-                y -= scale * (top.height - top.offset.y);
-                draw(
-                    &top,
-                    &tile.texture,
-                    Vec2 {
-                        x: destination.x,
-                        y,
-                    },
-                    color,
-                    scale,
-                );
-            }
+            ImageData::MultistoreyDrawable(_, _, _) => panic!("A tile cannot be multistorey!"),
         }
     }
 

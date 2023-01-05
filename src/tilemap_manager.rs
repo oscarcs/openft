@@ -26,6 +26,12 @@ pub mod tilemap_manager {
         pub x0: usize,
         pub y0: usize,
         pub entity_type_id: usize,
+        pub entity_info: Option<EntityInfo>,
+    }
+
+    #[derive(Debug)]
+    pub struct EntityInfo {
+        pub height: usize,
     }
 
     pub struct TileMap<'a> {
@@ -53,6 +59,7 @@ pub mod tilemap_manager {
                 x0: 0,
                 y0: 0,
                 entity_type_id: 0,
+                entity_info: None,
             });
 
             t
@@ -68,16 +75,27 @@ pub mod tilemap_manager {
             &self.ground_drawables[idx]
         }
 
-        pub fn get_entity(&self, x: usize, y: usize) -> Option<&DrawableTileData<'a>> {
+        pub fn get_entity(
+            &self,
+            x: usize,
+            y: usize,
+        ) -> Option<(&Entity, &DrawableTileData<'a>, Tile)> {
             let id = self.get(x, y).entity_id;
             if id > 0 {
                 let id = ObjId::from_index(id as u32);
                 let entity = self.entities.get(id).unwrap();
 
-                return match entity.x0 == x && entity.y0 == y {
-                    true => Some(&self.entity_drawables[entity.entity_type_id]),
-                    false => None,
+                let offset = Tile {
+                    x: (x.saturating_sub(entity.x0)) as i32,
+                    y: (entity.y0.saturating_sub(y)) as i32,
+                    z: 0,
                 };
+
+                return Some((
+                    entity,
+                    &self.entity_drawables[entity.entity_type_id],
+                    offset,
+                ));
             }
             None
         }
@@ -110,10 +128,16 @@ pub mod tilemap_manager {
             ObjPool::<usize>::obj_id_to_index(id) as usize
         }
 
-        pub fn set_entity(&mut self, x0: usize, y0: usize, entity_type: usize) -> bool {
+        pub fn set_entity(
+            &mut self,
+            x0: usize,
+            y0: usize,
+            entity_type: usize,
+            entity_info: Option<EntityInfo>,
+        ) -> bool {
             let drawable = &self.entity_drawables[entity_type];
 
-            let x1 = match x0.checked_sub((drawable.size.x - 1) as usize) {
+            let x1 = match x0.checked_add((drawable.size.x - 1) as usize) {
                 Some(x1) => x1,
                 None => return false,
             };
@@ -124,8 +148,12 @@ pub mod tilemap_manager {
             };
 
             // Check that there is no existing entity within the area
-            for x in x1..=x0 {
+            for x in x0..=x1 {
                 for y in y1..=y0 {
+                    if x > self.data.len() || y > self.data[0].len() {
+                        return false;
+                    }
+
                     match self.data[x][y].entity_id {
                         0 => continue,
                         _ => return false,
@@ -137,16 +165,16 @@ pub mod tilemap_manager {
                 x0,
                 y0,
                 entity_type_id: entity_type,
+                entity_info,
             };
             let id = self.create_entity(entity);
 
             // Set the area tiles
-            for x in x1..=x0 {
+            for x in x0..=x1 {
                 for y in y1..=y0 {
                     self.data[x][y].entity_id = id;
                 }
             }
-
             true
         }
     }

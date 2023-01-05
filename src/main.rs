@@ -1,5 +1,9 @@
-use macroquad::{prelude::*, rand::gen_range};
+use macroquad::{
+    prelude::*,
+    rand::{gen_range, srand},
+};
 use plugin_manager::plugin_manager::*;
+use std::time::{SystemTime, UNIX_EPOCH};
 use texture_manager::texture_manager::*;
 use tilemap_manager::tilemap_manager::*;
 use util::util::*;
@@ -14,6 +18,14 @@ const MAP_SIZE: usize = 200;
 
 #[macroquad::main("OpenFT")]
 async fn main() {
+    srand(
+        (SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            & 0xFFFFFFFFFFFFFFFF) as u64,
+    );
+
     let mut camera: Vec2 = Vec2 { x: 0.0, y: 0.0 };
     let mut map = TileMap::new(MAP_SIZE, MAP_SIZE);
 
@@ -41,9 +53,6 @@ async fn main() {
         map.create_ground_type(tile);
     }
 
-    map.set_ground(1, 1, 1);
-    map.set_ground(2, 2, 2);
-
     let plugin_dirs = enumerate_plugins().expect("Plugins not found!");
     let plugins = load_plugins(plugin_dirs);
     let plugin_textures = load_plugin_textures(&plugins).await;
@@ -54,6 +63,20 @@ async fn main() {
                 &plugin.title,
                 &plugin_textures,
             ));
+        }
+    }
+
+    for x in 0..MAP_SIZE {
+        for y in 0..MAP_SIZE {
+            let base_chance = (x * x) + (y * y);
+
+            if gen_range(0, base_chance) < 200 {
+                let t = gen_range(80, map.entity_type_count());
+                let entity_info = EntityInfo {
+                    height: gen_range(0, 7),
+                };
+                map.set_entity(x, y, t, Some(entity_info));
+            }
         }
     }
 
@@ -112,7 +135,14 @@ async fn main() {
             let y_dest = mouse_iso.y.max(0) as usize;
 
             let t = gen_range(0, map.entity_type_count());
-            map.set_entity(x_dest, y_dest, t);
+            let entity_info = EntityInfo {
+                height: gen_range(1, 5),
+            };
+            let res = map.set_entity(x_dest, y_dest, t, Some(entity_info));
+
+            if !res {
+                println!("Couldn't create at {} {}", x_dest, y_dest);
+            }
         }
 
         let screen_xy_origin = screen_to_xy(Vec2 { x: 0.0, y: 0.0 }, camera, zoom_level);
@@ -142,17 +172,25 @@ async fn main() {
                 let pos_xy = iso_to_xy(&tile);
                 let pos_screen = xy_to_screen(pos_xy, camera, zoom_level);
 
-                // Draw ground
-                draw_tile(map.get_ground(tx, ty), pos_screen, WHITE, zoom_level);
-                calls += 1;
-
-                // Draw entity
                 match map.get_entity(tx, ty) {
-                    Some(drawable) => {
-                        draw_tile(drawable, pos_screen, WHITE, zoom_level);
+                    Some((entity, drawable, offset)) => {
+                        draw_entity(
+                            &entity.entity_info,
+                            drawable,
+                            offset,
+                            pos_screen,
+                            WHITE,
+                            zoom_level,
+                        );
+                        calls += match &entity.entity_info {
+                            Some(e) => e.height + 2,
+                            None => 1,
+                        }
+                    }
+                    None => {
+                        draw_tile(map.get_ground(tx, ty), pos_screen, WHITE, zoom_level);
                         calls += 1;
                     }
-                    None => (),
                 };
             }
         }

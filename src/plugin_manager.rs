@@ -43,6 +43,7 @@ pub mod plugin_manager {
         pub origin_x: i32,
         pub origin_y: i32,
         pub offset: i32,
+        pub opposite: bool,
     }
 
     #[derive(Debug, Clone, Copy)]
@@ -268,13 +269,17 @@ pub mod plugin_manager {
 
         let size = &metadata["size"];
         let sizes: Vec<_> = size.split(",").collect();
-        // x and y are flipped in our coordinate system
+
+        // x and y are usually flipped in our coordinate system relative to the plugins.
         let size_x: i32 = sizes[1].parse().unwrap_or(0);
         let size_y: i32 = sizes[0].parse().unwrap_or(0);
 
         let height = match metadata.get("height") {
-            Some(h) => h.parse().unwrap_or(0),
-            None => 0,
+            Some(h) => h.parse().unwrap_or(1),
+            None => match metadata.get("maxHeight") {
+                Some(h) => h.parse().unwrap_or(1),
+                None => 1,
+            },
         };
 
         Contribution {
@@ -414,7 +419,7 @@ pub mod plugin_manager {
         Ok(Color { r, g, b, a: 1.0 })
     }
 
-    fn parse_origin_and_offset(node: Node) -> (i32, i32, i32) {
+    fn parse_origin_offset_and_opposite(node: Node) -> (i32, i32, i32, bool) {
         let origin = node.attribute("origin").unwrap(); //todo
         let origins: Vec<_> = origin.split(",").collect();
         let origin_x: i32 = origins[0].trim().parse().unwrap_or(0);
@@ -423,7 +428,10 @@ pub mod plugin_manager {
         let offset = node.attribute("offset").unwrap(); //todo
         let offset = offset.parse().unwrap();
 
-        (origin_x, origin_y, offset)
+        let opposite = node.attribute("opposite").unwrap_or("false");
+        let opposite = opposite.parse().unwrap();
+
+        (origin_x, origin_y, offset, opposite)
     }
 
     fn parse_generic_structure_sprite(node: Node) -> (Vec<ContributionSprite>, String) {
@@ -435,7 +443,8 @@ pub mod plugin_manager {
 
         let mut sprites = Vec::new();
         for sprite_node in sprite_nodes {
-            let (origin_x, origin_y, offset) = parse_origin_and_offset(sprite_node);
+            let (origin_x, origin_y, offset, opposite) =
+                parse_origin_offset_and_opposite(sprite_node);
 
             let picture_node = sprite_node
                 .children()
@@ -459,6 +468,7 @@ pub mod plugin_manager {
                 origin_x,
                 origin_y,
                 offset,
+                opposite,
             });
         }
         (sprites, image_ref)
@@ -477,19 +487,19 @@ pub mod plugin_manager {
                 .children()
                 .find(|x| x.has_tag_name("top"))
                 .unwrap();
-            let top = parse_origin_and_offset(top_node);
+            let top = parse_origin_offset_and_opposite(top_node);
 
             let middle_node = picture_node
                 .children()
                 .find(|x| x.has_tag_name("middle"))
                 .unwrap();
-            let middle = parse_origin_and_offset(middle_node);
+            let middle = parse_origin_offset_and_opposite(middle_node);
 
             let bottom_node = picture_node
                 .children()
                 .find(|x| x.has_tag_name("bottom"))
                 .unwrap();
-            let bottom = parse_origin_and_offset(bottom_node);
+            let bottom = parse_origin_offset_and_opposite(bottom_node);
 
             let top_picture = top_node
                 .children()
@@ -515,16 +525,19 @@ pub mod plugin_manager {
                     origin_x: top.0,
                     origin_y: top.1,
                     offset: top.2,
+                    opposite: top.3,
                 },
                 middle: ContributionSprite {
                     origin_x: middle.0,
                     origin_y: middle.1,
                     offset: middle.2,
+                    opposite: middle.3,
                 },
                 bottom: ContributionSprite {
                     origin_x: bottom.0,
                     origin_y: bottom.1,
                     offset: bottom.2,
+                    opposite: bottom.3,
                 },
             });
         }
